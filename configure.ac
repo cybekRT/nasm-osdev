@@ -127,7 +127,7 @@ AC_CHECK_FUNCS(pathconf)
 
 AC_FUNC_FSEEKO
 AC_CHECK_FUNCS([_fseeki64])
-AC_CHECK_FUNCS([ftruncate _chsize _chsize_s])
+AC_CHECK_FUNCS([ftruncate _chsize])
 AC_CHECK_FUNCS([fileno _fileno])
 
 AC_CHECK_FUNCS(_filelengthi64)
