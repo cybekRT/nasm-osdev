@@ -1,10 +1,10 @@
 dnl Process this file with autoconf 2.69 or later to produce
 dnl a configure script.
 AC_PREREQ(2.69)
-AC_INIT([config/config.h.in])
-AC_CONFIG_HEADERS([config/config.h])
+AC_INIT(config/config.h.in)
+AC_CONFIG_HEADERS(config/config.h)
+
 AC_PREFIX_PROGRAM(nasm)
-AC_CONFIG_AUX_DIR(autoconf/helpers)
 
 dnl Save initial CFLAGS, to see if -g -O2 came from configure or not
 pa_init_cflags="$CFLAGS"
@@ -24,28 +24,24 @@ AC_PROG_LN_S
 AC_PROG_MAKE_SET
 AC_PROG_INSTALL
 
-pa_no_optimize=false
-
-dnl If the user did not specify a CFLAGS default, change default
-dnl to -O0 for debugging
+dnl If the user did not specify a CFLAGS default, change default -O2
+dnl to either -O3 (normal) or -O0 (for debugging)
 PA_ARG_DISABLED([optimization],
  [compile without optimization (-O0) to help debugging],
- [pa_no_optimize=true])
+ [pa_optimize=-O0], [pa_optimize=-O3])
 
 dnl Compile and link with dwarf debug
 PA_ARG_ENABLED([gdb],
  [disable optimization and compile with extra debug information for GDB debugger],
- [PA_ADD_CFLAGS([-ggdb3])
-  pa_no_optimize=true])
+ [pa_optimize='-O0'
+  PA_ADD_CFLAGS([-ggdb3])
+ ])
 
-AS_IF([$pa_no_optimize],
-      [PA_ADD_CFLAGS([-O0])
-       PA_ADD_CFLAGS([-fno-omit-frame-pointer])])
+AS_IF([test x"$pa_init_cflags" = x],
+      [CFLAGS=`echo "$CFLAGS" | sed -e "s/-O2/$pa_optimize/"`])
 
-dnl Profiling
-PA_ARG_ENABLED([profiling],
- [compile with profiling (-pg option)],
- [PA_ADD_CFLAGS([-pg])])
+AS_IF([test x"$pa_optimize" = "x-O0"],
+      [PA_ADD_CFLAGS([-fno-omit-frame-pointer])])
 
 dnl Abort on panic
 PA_ARG_ENABLED([panic-abort],
@@ -120,9 +116,6 @@ AC_CHECK_FUNCS(strncasecmp strnicmp)
 AC_CHECK_FUNCS(strsep)
 AC_CHECK_FUNCS(strnlen)
 AC_CHECK_FUNCS(strrchrnul)
-AC_CHECK_FUNCS(iscntrl)
-AC_CHECK_FUNCS(isascii)
-AC_CHECK_FUNCS(mempcpy)
 
 AC_CHECK_FUNCS(getuid)
 AC_CHECK_FUNCS(getgid)
@@ -137,6 +130,7 @@ AC_CHECK_FUNCS([_fseeki64])
 AC_CHECK_FUNCS([ftruncate _chsize _chsize_s])
 AC_CHECK_FUNCS([fileno _fileno])
 
+AC_CHECK_FUNCS(_filelengthi64)
 AC_FUNC_MMAP
 AC_CHECK_FUNCS(getpagesize)
 AC_CHECK_FUNCS(sysconf)
@@ -164,7 +158,6 @@ AC_CHECK_TYPES([struct _stati64])
 AC_CHECK_TYPES([struct stat])
 AC_CHECK_FUNCS([stat _stati64])
 AC_CHECK_FUNCS([fstat _fstati64])
-AC_CHECK_FUNCS([S_ISREG])
 
 dnl Check for functions that might not be declared in the headers for
 dnl various idiotic reasons (mostly because of library authors
@@ -213,10 +206,9 @@ PA_HAVE_FUNC(_byteswap_ulong, (0))
 PA_HAVE_FUNC(_byteswap_uint64, (0))
 
 dnl
-dnl Some rather useful gcc extensions...
+dnl Check for __builtin_constant_p()
 dnl
 PA_HAVE_FUNC(__builtin_constant_p, (0))
-PA_HAVE_FUNC(__builtin_choose_expr, (0,1,2))
 
 dnl
 dnl Check for supported gcc attributes; some compilers (e.g. Sun CC)
@@ -225,34 +217,32 @@ dnl some other features of gcc.
 dnl
 PA_ADD_CFLAGS([-Werror=attributes])
 PA_FUNC_ATTRIBUTE(noreturn)
-PA_FUNC_ATTRIBUTE(returns_nonnull,,,,,never_null)
+PA_FUNC_ATTRIBUTE(returns_nonnull)
 PA_FUNC_ATTRIBUTE(malloc)
-PA_FUNC_ATTRIBUTE(alloc_size,[1])
-PA_FUNC_ATTRIBUTE(alloc_size,[1,2])
-PA_FUNC_ATTRIBUTE(sentinel,,, [const char *, ...], ["a","b",NULL],end_with_null)
-PA_FUNC_ATTRIBUTE(format, [printf,1,2], int, [const char *, ...], ["%d",1])
+PA_FUNC_ATTRIBUTE(alloc_size, (1))
+PA_FUNC_ATTRIBUTE(sentinel,,, [const char *, ...], ["a","b",NULL])
+PA_FUNC_ATTRIBUTE(format, [(printf,1,2)], int, [const char *, ...], ["%d",1])
 PA_FUNC_ATTRIBUTE(const)
 PA_FUNC_ATTRIBUTE(pure)
-PA_FUNC_ATTRIBUTE(cold,,,,,unlikely_func)
+PA_FUNC_ATTRIBUTE(cold)
 PA_FUNC_ATTRIBUTE_ERROR
 
 dnl
 dnl support function sections (if available)
 dnl
-PA_ARG_DISABLED([sections],
- [do not try to compile with function/data section support],
- [],
- [PA_ADD_CFLAGS([-ffunction-sections])
-  PA_ADD_CFLAGS([-fdata-sections])
-  PA_ADD_LDFLAGS([-Wl,--gc-sections])]
- )
+PA_ARG_ENABLED([sections],
+ [compile with function/data section support],
+ [PA_ADD_CLDFLAGS([-ffunction-sections])
+  PA_ADD_CLDFLAGS([-fdata-sections])
+  PA_ADD_CLDFLAGS([-Wl,--gc-sections])],
+ [])
 
 dnl
 dnl support LTO
 dnl
 PA_ARG_ENABLED([lto],
  [compile with gcc-style link time optimization],
- [PA_ADD_CFLAGS([-flto])
+ [PA_ADD_CLDFLAGS([-flto])
   dnl Note: we use _PROG rather than _TOOL since we are prepending the full
   dnl CC name which ought to already contain the host triplet if needed
   ccbase=`echo "$CC" | awk '{ print $1; }'`
@@ -267,29 +257,26 @@ dnl
 PA_ARG_ENABLED([sanitizer],
  [compile with sanitizers enabled],
  [PA_ADD_CFLAGS([-fno-omit-frame-pointer])
-  PA_ADD_CFLAGS([-fsanitize=address])
-  PA_ADD_CFLAGS([-fsanitize=undefined])])
+  PA_ADD_CLDFLAGS([-fsanitize=address])
+  PA_ADD_CLDFLAGS([-fsanitize=undefined])])
 
 dnl
 dnl Don't make symbols visible, there is no point and it just
 dnl makes the code slower.
 dnl
-PA_ADD_CFLAGS([-fvisibility=hidden])
+PA_ADD_CLDFLAGS([-fvisibility=hidden])
 
 dnl If we have gcc, add appropriate code cleanliness options
+PA_ADD_CFLAGS([-W])
 PA_ADD_CFLAGS([-Wall])
-PA_ARG_DISABLED([pedantic],
-[disable some extra paranoid compiler warnings],
-[],
-[PA_ADD_CFLAGS([-W])
- PA_ADD_CFLAGS([-pedantic])
- PA_ADD_CFLAGS([-Wc90-c99-compat])])
+PA_ADD_CFLAGS([-pedantic])
 dnl LLVM doesn't error out on invalid -W options unless this option is
 dnl specified first.  Enable this so this script can actually discover
 dnl which -W options are possible for this compiler.
 PA_ADD_CFLAGS([-Werror=unknown-warning-option])
 dnl Suppress format warning on Windows targets due to their <inttypes.h>
 PA_ADD_CFLAGS([-Wpedantic-ms-format],[-Wno-pedantic-ms-format])
+PA_ADD_CFLAGS([-Wc90-c99-compat])
 PA_ADD_CFLAGS([-Wlong-long],[-Wno-long-long])
 dnl This is needed because we intentionally expect strncpy() to fill
 dnl in a zero-padded (not zero-terminated) buffer in several backends

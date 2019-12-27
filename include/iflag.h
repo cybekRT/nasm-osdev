@@ -4,29 +4,25 @@
 #include "compiler.h"
 #include "ilog2.h"
 
+#include <string.h>
 
 #include "iflaggen.h"
 
-#define IF_GENBIT(bit)          (UINT32_C(1) << ((bit) & 31))
-
-static inline int ifcomp(uint32_t a, uint32_t b)
-{
-    return (a > b) - (a < b);
-}
+#define IF_GENBIT(bit)          (UINT32_C(1) << (bit))
 
 static inline bool iflag_test(const iflag_t *f, unsigned int bit)
 {
-    return !!(f->field[bit >> 5] & IF_GENBIT(bit));
+    return !!(f->field[bit >> 5] & IF_GENBIT(bit & 31));
 }
 
 static inline void iflag_set(iflag_t *f, unsigned int bit)
 {
-    f->field[bit >> 5] |= IF_GENBIT(bit);
+    f->field[bit >> 5] |= IF_GENBIT(bit & 31);
 }
 
 static inline void iflag_clear(iflag_t *f, unsigned int bit)
 {
-    f->field[bit >> 5] &= ~IF_GENBIT(bit);
+    f->field[bit >> 5] &= ~IF_GENBIT(bit & 31);
 }
 
 static inline void iflag_clear_all(iflag_t *f)
@@ -50,7 +46,7 @@ static inline int iflag_cmp(const iflag_t *a, const iflag_t *b)
         if (a->field[i] == b->field[i])
             continue;
 
-        return ifcomp(a->field[i], b->field[i]);
+        return (int)(a->field[i] - b->field[i]);
     }
 
     return 0;
@@ -71,8 +67,21 @@ static inline int iflag_cmp(const iflag_t *a, const iflag_t *b)
 IF_GEN_HELPER(xor, ^)
 
 /* Some helpers which are to work with predefined masks */
-#define IF_SMASK        (IFM_SB|IFM_SW|IFM_SD|IFM_SQ|IFM_SO|IFM_SY|IFM_SZ|IFM_SIZE|IFM_ANYSIZE)
-#define IF_ARMASK       (IFM_AR0|IFM_AR1|IFM_AR2|IFM_AR3|IFM_AR4)
+#define IF_SMASK        \
+    (IF_GENBIT(IF_SB)  |\
+     IF_GENBIT(IF_SW)  |\
+     IF_GENBIT(IF_SD)  |\
+     IF_GENBIT(IF_SQ)  |\
+     IF_GENBIT(IF_SO)  |\
+     IF_GENBIT(IF_SY)  |\
+     IF_GENBIT(IF_SZ)  |\
+     IF_GENBIT(IF_SIZE))
+#define IF_ARMASK       \
+    (IF_GENBIT(IF_AR0) |\
+     IF_GENBIT(IF_AR1) |\
+     IF_GENBIT(IF_AR2) |\
+     IF_GENBIT(IF_AR3) |\
+     IF_GENBIT(IF_AR4))
 
 #define _itemp_smask(idx)      (insns_flags[(idx)].field[0] & IF_SMASK)
 #define _itemp_armask(idx)     (insns_flags[(idx)].field[0] & IF_ARMASK)
@@ -83,14 +92,26 @@ IF_GEN_HELPER(xor, ^)
 #define itemp_armask(itemp)     _itemp_armask((itemp)->iflag_idx)
 
 /*
- * IF_ANY is the highest CPU level by definition
+ * IF_8086 is the first CPU level flag and IF_PLEVEL the last
  */
-#define IF_PLEVEL              IF_ANY /* Default CPU level */
-#define IF_CPU_LEVEL_MASK      ((IFM_ANY << 1) - 1)
+#if IF_8086 & 31
+#error "IF_8086 must be on a uint32_t boundary"
+#endif
+#define IF_PLEVEL               IF_IA64
+#define IF_CPU_FIELD	       (IF_8086 >> 5)
+#define IF_CPU_LEVEL_MASK      ((IF_GENBIT(IF_PLEVEL & 31) << 1) - 1)
+
+/*
+ * IF_PRIV is the firstr instruction filtering flag
+ */
+#if IF_PRIV & 31
+#error "IF_PRIV must be on a uint32_t boundary"
+#endif
+#define IF_FEATURE_FIELD	(IF_PRIV >> 5)
 
 static inline int iflag_cmp_cpu(const iflag_t *a, const iflag_t *b)
 {
-    return ifcomp(a->field[IF_CPU_FIELD], b->field[IF_CPU_FIELD]);
+    return (int)(a->field[IF_CPU_FIELD] - b->field[IF_CPU_FIELD]);
 }
 
 static inline uint32_t _iflag_cpu_level(const iflag_t *a)
@@ -100,20 +121,24 @@ static inline uint32_t _iflag_cpu_level(const iflag_t *a)
 
 static inline int iflag_cmp_cpu_level(const iflag_t *a, const iflag_t *b)
 {
-    return ifcomp(_iflag_cpu_level(a), _iflag_cpu_level(b));
+    uint32_t aa = _iflag_cpu_level(a);
+    uint32_t bb = _iflag_cpu_level(b);
+
+    return (int)(aa - bb);
 }
 
 /* Returns true if the CPU level is at least a certain value */
 static inline bool iflag_cpu_level_ok(const iflag_t *a, unsigned int bit)
 {
-    return _iflag_cpu_level(a) >= IF_GENBIT(bit);
+    return _iflag_cpu_level(a) >= IF_GENBIT(bit & 31);
 }
 
 static inline void iflag_set_all_features(iflag_t *a)
 {
-    uint32_t *p = &a->field[IF_FEATURE_FIELD];
+    size_t i;
 
-    memset(p, -1, IF_FEATURE_NFIELDS * sizeof(uint32_t));
+    for (i = IF_FEATURE_FIELD; i < IF_CPU_FIELD; i++)
+        a->field[i] = ~UINT32_C(0);
 }
 
 static inline void iflag_set_cpu(iflag_t *a, unsigned int cpu)

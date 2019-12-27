@@ -35,6 +35,7 @@
 #define ILOG2_H
 
 #include "compiler.h"
+#include <limits.h>
 
 #ifdef ILOG2_C                  /* For generating the out-of-line functions */
 # undef extern_inline
@@ -43,9 +44,9 @@
 #endif
 
 #ifdef inline_prototypes
-extern unsigned int const_func ilog2_32(uint32_t v);
-extern unsigned int const_func ilog2_64(uint64_t v);
-extern unsigned int const_func ilog2_64(uint64_t vv);
+extern int const_func ilog2_32(uint32_t v);
+extern int const_func ilog2_64(uint64_t v);
+extern int const_func ilog2_64(uint64_t vv);
 extern int const_func alignlog2_32(uint32_t v);
 extern int const_func alignlog2_64(uint64_t v);
 #endif
@@ -61,21 +62,11 @@ extern int const_func alignlog2_64(uint64_t v);
     } while (0)
 
 
-#if defined(HAVE___BUILTIN_CLZ) && INT_MAX == 2147483647
+#if defined(__GNUC__) && defined(__x86_64__)
 
-extern_inline unsigned int const_func ilog2_32(uint32_t v)
+extern_inline int const_func ilog2_32(uint32_t v)
 {
-    if (!v)
-        return 0;
-
-    return __builtin_clz(v) ^ 31;
-}
-
-#elif defined(__GNUC__) && defined(__x86_64__)
-
-extern_inline unsigned int const_func ilog2_32(uint32_t v)
-{
-    unsigned int n;
+    int n;
 
     __asm__("bsrl %1,%0"
             : "=r" (n)
@@ -85,9 +76,9 @@ extern_inline unsigned int const_func ilog2_32(uint32_t v)
 
 #elif defined(__GNUC__) && defined(__i386__)
 
-extern_inline unsigned int const_func ilog2_32(uint32_t v)
+extern_inline int const_func ilog2_32(uint32_t v)
 {
-    unsigned int n;
+    int n;
 
 #ifdef __i686__
     __asm__("bsrl %1,%0 ; cmovz %2,%0\n"
@@ -102,9 +93,19 @@ extern_inline unsigned int const_func ilog2_32(uint32_t v)
      return n;
 }
 
+#elif defined(HAVE___BUILTIN_CLZ) && INT_MAX == 2147483647
+
+extern_inline int const_func ilog2_32(uint32_t v)
+{
+    if (!v)
+        return 0;
+
+    return __builtin_clz(v) ^ 31;
+}
+
 #elif defined(HAVE__BITSCANREVERSE)
 
-extern_inline unsigned int const_func ilog2_32(uint32_t v)
+extern_inline int const_func ilog2_32(uint32_t v)
 {
     unsigned long ix;
     return _BitScanReverse(&ix, v) ? v : 0;
@@ -112,9 +113,9 @@ extern_inline unsigned int const_func ilog2_32(uint32_t v)
 
 #else
 
-extern_inline unsigned int const_func ilog2_32(uint32_t v)
+extern_inline int const_func ilog2_32(uint32_t v)
 {
-    unsigned int p = 0;
+    int p = 0;
 
     ROUND(v, p, 16);
     ROUND(v, p,  8);
@@ -127,19 +128,9 @@ extern_inline unsigned int const_func ilog2_32(uint32_t v)
 
 #endif
 
-#if defined(HAVE__BUILTIN_CLZLL) && LLONG_MAX == 9223372036854775807LL
+#if defined(__GNUC__) && defined(__x86_64__)
 
-extern_inline unsigned int const_func ilog2_64(uint64_t v)
-{
-    if (!v)
-        return 0;
-
-    return __builtin_clzll(v) ^ 63;
-}
-
-#elif defined(__GNUC__) && defined(__x86_64__)
-
-extern_inline unsigned int const_func ilog2_64(uint64_t v)
+extern_inline int const_func ilog2_64(uint64_t v)
 {
     uint64_t n;
 
@@ -149,9 +140,19 @@ extern_inline unsigned int const_func ilog2_64(uint64_t v)
     return n;
 }
 
+#elif defined(HAVE__BUILTIN_CLZLL) && LLONG_MAX == 9223372036854775807LL
+
+extern_inline int const_func ilog2_64(uint64_t v)
+{
+    if (!v)
+        return 0;
+
+    return __builtin_clzll(v) ^ 63;
+}
+
 #elif defined(HAVE__BITSCANREVERSE64)
 
-extern_inline unsigned int const_func ilog2_64(uint64_t v)
+extern_inline int const_func ilog2_64(uint64_t v)
 {
     unsigned long ix;
     return _BitScanReverse64(&ix, v) ? ix : 0;
@@ -159,9 +160,9 @@ extern_inline unsigned int const_func ilog2_64(uint64_t v)
 
 #else
 
-extern_inline unsigned int const_func ilog2_64(uint64_t vv)
+extern_inline int const_func ilog2_64(uint64_t vv)
 {
-    unsigned int p = 0;
+    int p = 0;
     uint32_t v;
 
     v = vv >> 32;
@@ -170,7 +171,13 @@ extern_inline unsigned int const_func ilog2_64(uint64_t vv)
     else
         v = vv;
 
-    return p + ilog2_32(v);
+    ROUND(v, p, 16);
+    ROUND(v, p,  8);
+    ROUND(v, p,  4);
+    ROUND(v, p,  2);
+    ROUND(v, p,  1);
+
+    return p;
 }
 
 #endif

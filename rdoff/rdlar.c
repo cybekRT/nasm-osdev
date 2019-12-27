@@ -41,6 +41,7 @@
 #include <stdlib.h>
 #include <ctype.h>
 #include <stdarg.h>
+#include <string.h>
 #include <errno.h>
 #include <time.h>
 #include <sys/types.h>

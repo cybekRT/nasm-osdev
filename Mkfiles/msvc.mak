@@ -68,12 +68,11 @@ LIBOBJ = stdlib\snprintf.$(O) stdlib\vsnprintf.$(O) stdlib\strlcpy.$(O) \
 	stdlib\strnlen.$(O) stdlib\strrchrnul.$(O) \
 	\
 	nasmlib\ver.$(O) \
-	nasmlib\alloc.$(O) nasmlib\asprintf.$(O) nasmlib\errfile.$(O) \
-	nasmlib\crc64.$(O) nasmlib\md5c.$(O) \
-	nasmlib\string.$(O) nasmlib\nctype.$(O) \
+	nasmlib\crc64.$(O) nasmlib\malloc.$(O) nasmlib\errfile.$(O) \
+	nasmlib\md5c.$(O) nasmlib\string.$(O) \
 	nasmlib\file.$(O) nasmlib\mmap.$(O) nasmlib\ilog2.$(O) \
 	nasmlib\realpath.$(O) nasmlib\path.$(O) \
-	nasmlib\filename.$(O) \
+	nasmlib\filename.$(O) nasmlib\srcfile.$(O) \
 	nasmlib\zerobuf.$(O) nasmlib\readnum.$(O) nasmlib\bsi.$(O) \
 	nasmlib\rbtree.$(O) nasmlib\hashtbl.$(O) \
 	nasmlib\raa.$(O) nasmlib\saa.$(O) \
@@ -86,7 +85,7 @@ LIBOBJ = stdlib\snprintf.$(O) stdlib\vsnprintf.$(O) stdlib\strlcpy.$(O) \
 	x86\regs.$(O) x86\regvals.$(O) x86\regflags.$(O) x86\regdis.$(O) \
 	x86\disp8.$(O) x86\iflag.$(O) \
 	\
-	asm\error.$(O) asm\warnings.$(O) \
+	asm\error.$(O) \
 	asm\float.$(O) \
 	asm\directiv.$(O) asm\directbl.$(O) \
 	asm\pragma.$(O) \
@@ -98,10 +97,11 @@ LIBOBJ = stdlib\snprintf.$(O) stdlib\vsnprintf.$(O) stdlib\strlcpy.$(O) \
 	asm\segalloc.$(O) \
 	asm\preproc-nop.$(O) \
 	asm\rdstrnum.$(O) \
-	asm\srcfile.$(O) \
+	\
 	macros\macros.$(O) \
 	\
 	output\outform.$(O) output\outlib.$(O) output\legacy.$(O) \
+	output\strtbl.$(O) \
 	output\nulldbg.$(O) output\nullout.$(O) \
 	output\outbin.$(O) output\outaout.$(O) output\outcoff.$(O) \
 	output\outelf.$(O) \
@@ -143,10 +143,9 @@ PERLREQ = x86\insnsb.c x86\insnsa.c x86\insnsd.c x86\insnsi.h x86\insnsn.c \
 	  x86\iflag.c x86\iflaggen.h \
 	  macros\macros.c \
 	  asm\pptok.ph asm\directbl.c asm\directiv.h \
-	  asm\warnings.c include\warnings.h \
 	  version.h version.mac version.mak nsis\version.nsh
 
-INSDEP = x86\insns.dat x86\insns.pl x86\insns-iflags.ph x86\iflags.ph
+INSDEP = x86\insns.dat x86\insns.pl x86\insns-iflags.ph
 
 x86\iflag.c: $(INSDEP)
 	$(RUNPERL) $(srcdir)\x86\insns.pl -fc \
@@ -211,23 +210,6 @@ x86\regvals.c: x86\regs.dat x86\regs.pl
 x86\regs.h: x86\regs.dat x86\regs.pl
 	$(RUNPERL) $(srcdir)\x86\regs.pl h \
 		$(srcdir)\x86\regs.dat > x86\regs.h
-
-# Extract warnings from source code. Since this depends on
-# ALL the source files, this is only done on demand.
-WARNFILES = asm\warnings.c include\warnings.h doc\warnings.src
-
-warnings:
-	rm -f $(WARNFILES)
-	$(MAKE) $(WARNFILES)
-
-asm\warnings.c: asm\warnings.pl
-	$(RUNPERL) $(srcdir)\asm\warnings.pl c asm\warnings.c $(srcdir)
-
-include\warnings.h: asm\warnings.pl
-	$(RUNPERL) $(srcdir)\asm\warnings.pl h include\warnings.h $(srcdir)
-
-doc\warnings.src: asm\warnings.pl
-	$(RUNPERL) $(srcdir)\asm\warnings.pl doc doc\warnings.src $(srcdir)
 
 # Assembler token hash
 asm\tokhash.c: x86\insns.dat x86\regs.dat asm\tokens.dat asm\tokhash.pl \

@@ -4,12 +4,10 @@
 *.dbg
 *.dep
 *.exe
-*.com
 *.lib
 *.i
 *.ith
 *.lst
-*.map
 *.mo32
 *.mo64
 *.o
@@ -49,9 +47,8 @@ TAGS
 /asm/pptok.ph
 /asm/tokens.h
 /asm/tokhash.c
-/asm/warnings.c
-/config/config.h.in
 /config/config.h
+/config/config.h.in
 /config.log
 /config.status
 /configure
@@ -68,10 +65,6 @@ TAGS
 /doc/info
 /doc/inslist.src
 /doc/version.src
-/doc/warnings.src
-/doc/fontpath
-/doc/Fontmap
-/include/warnings.h
 /macros/macros.c
 /misc/omfdump
 /nasm
@@ -109,8 +102,3 @@ TAGS
 /x86/regs.c
 /x86/regs.h
 /x86/regvals.c
-/patches/
-/autoconf/aclocal.m4
-/autoconf/compile
-/autoconf/config.*
-/autoconf/install-sh

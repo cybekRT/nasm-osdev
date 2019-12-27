@@ -1,6 +1,6 @@
 /* ----------------------------------------------------------------------- *
  *
- *   Copyright 1996-2019 The NASM Authors - All Rights Reserved
+ *   Copyright 1996-2018 The NASM Authors - All Rights Reserved
  *   See the file AUTHORS included with the NASM distribution for
  *   the specific copyright holders.
  *
@@ -39,17 +39,17 @@
 
 #include "compiler.h"
 
-#include "nctype.h"
+#include <stdlib.h>
+#include <string.h>
+#include <ctype.h>
+#include <limits.h>
 
 #include "nasm.h"
 #include "nasmlib.h"
 #include "assemble.h"
 #include "error.h"
-#include "listing.h"
 
-static enum directive_result ignore_pragma(const struct pragma *pragma);
 static enum directive_result output_pragma(const struct pragma *pragma);
-static enum directive_result debug_pragma(const struct pragma *pragma);
 static enum directive_result limit_pragma(const struct pragma *pragma);
 
 /*
@@ -89,131 +89,72 @@ static struct pragma_facility global_pragmas[] =
 {
     { "asm",		NULL },
     { "limit",          limit_pragma },
-    { "list",		list_pragma },
+    { "list",		NULL },
     { "file",		NULL },
     { "input",		NULL },
-    { "output",		output_pragma },
-    { "debug",	        debug_pragma },
-    { "ignore",		ignore_pragma },
 
-    /* This will never actually get this far... */
+    /* None of these should actually happen due to special handling */
     { "preproc",	NULL }, /* Handled in the preprocessor by necessity */
+    { "output",		NULL },
+    { "debug",	        NULL },
+    { "ignore",		NULL },
     { NULL, NULL }
 };
 
 /*
- * Invoke a pragma handler
- */
-static enum directive_result
-call_pragma(const struct pragma_facility *pf, struct pragma *pragma)
-{
-    if (!pf || !pf->handler)
-        return DIRR_UNKNOWN;
-
-    pragma->facility = pf;
-    return pf->handler(pragma);
-}
-
-/*
  * Search a pragma list for a known pragma facility and if so, invoke
- * the handler.  Return true if processing is complete.  The "default
- * name", *or def->name*, if set, matches the final NULL entry (used
+ * the handler.  Return true if processing is complete.
+ * The "default name", if set, matches the final NULL entry (used
  * for backends, so multiple backends can share the same list under
- * some circumstances, and the backends can implement common operations.)
+ * some circumstances.)
  */
-static enum directive_result
-search_pragma_list(const struct pragma_facility *list,
-                   const char *defaultname,
-                   const struct pragma_facility *def,
-                   const struct pragma *cpragma)
+static bool search_pragma_list(const struct pragma_facility *list,
+                               const char *default_name,
+                               pragma_handler generic_handler,
+			       struct pragma *pragma)
 {
-    const struct pragma_facility *pf = NULL;
+    const struct pragma_facility *pf;
     enum directive_result rv;
-    bool facility_match, is_default;
-    struct pragma pragma = *cpragma;
-    const char *facname = pragma.facility_name;
 
-    /* Is there a default facility and we match its name? */
-    is_default = def && def->name && !nasm_stricmp(facname, def->name);
-    facility_match = is_default;
+    if (!list)
+	return false;
 
-    /*
-     * Promote def->name to defaultname if both are set. This handles
-     * e.g. output -> elf32 so that we can handle elf32-specific
-     * directives in that handler.
-     */
-    if (defaultname) {
-        if (is_default)
-            facname = defaultname;
-        else
-            facility_match = !nasm_stricmp(facname, defaultname);
+    for (pf = list; pf->name; pf++) {
+        if (!nasm_stricmp(pragma->facility_name, pf->name))
+            goto found_it;
     }
 
-    if (facname && list) {
-        for (pf = list; pf->name; pf++) {
-            if (!nasm_stricmp(facname, pf->name)) {
-                facility_match = true;
-                rv = call_pragma(pf, &pragma);
-                if (rv != DIRR_UNKNOWN)
-                    goto found_it;
-            }
-        }
+    if (default_name && !nasm_stricmp(pragma->facility_name, default_name))
+        goto found_it;
 
-        if (facility_match) {
-            /*
-             * Facility name match but no matching directive; handler in NULL
-             * entry at end of list?
-             */
-            rv = call_pragma(pf, &pragma);
-            if (rv != DIRR_UNKNOWN)
-                goto found_it;
-        }
-    }
-
-    if (facility_match) {
-        /*
-         * Facility match but still nothing: def->handler if it exists
-         */
-        rv = call_pragma(def, &pragma);
-    } else {
-        /*
-         * No facility matched
-         */
-        return DIRR_UNKNOWN;
-    }
-
-    /*
-     * Otherwise we found the facility but not any supported directive,
-     * fall through...
-     */
+    return false;
 
 found_it:
+    pragma->facility = pf;
+
+    /* If the handler is NULL all pragmas are unknown... */
+    if (pf->handler)
+        rv = pf->handler(pragma);
+    else
+        rv = DIRR_UNKNOWN;
+
+    /* Is there an additional, applicable generic handler? */
+    if (rv == DIRR_UNKNOWN && generic_handler)
+        rv = generic_handler(pragma);
+
     switch (rv) {
     case DIRR_UNKNOWN:
-        switch (pragma.opcode) {
+        switch (pragma->opcode) {
         case D_none:
-            /*!
-             *!pragma-bad [off] malformed %pragma
-             *!=bad-pragma
-             *!  warns about a malformed or otherwise unparsable
-             *!  \c{%pragma} directive.
-             */
-            nasm_warn(ERR_PASS2|WARN_PRAGMA_BAD,
-                       "empty %%pragma %s", pragma.facility_name);
+            nasm_error(ERR_WARNING|ERR_PASS2|WARN_BAD_PRAGMA,
+                       "empty %%pragma %s", pragma->facility_name);
             break;
         default:
-            /*!
-             *!pragma-unknown [off] unknown %pragma facility or directive
-             *!=unknown-pragma
-             *!  warns about an unknown \c{%pragma} directive.
-             *!  This is not yet implemented for most cases.
-             */
-            nasm_warn(ERR_PASS2|WARN_PRAGMA_UNKNOWN,
+            nasm_error(ERR_WARNING|ERR_PASS2|WARN_UNKNOWN_PRAGMA,
                        "unknown %%pragma %s %s",
-                       pragma.facility_name, pragma.opname);
+                       pragma->facility_name, pragma->opname);
             break;
         }
-        rv = DIRR_ERROR;        /* Already printed an error message */
         break;
 
     case DIRR_OK:
@@ -226,33 +167,17 @@ found_it:
          * would be compromised, as opposed to an inherent error.
          */
         nasm_error(ERR_NONFATAL, "bad argument to %%pragma %s %s",
-                   pragma.facility_name, pragma.opname);
+                   pragma->facility_name, pragma->opname);
         break;
 
     default:
         panic();
     }
-    return rv;
+    return true;
 }
 
-/* This warning message is intended for future use */
-/*!
- *!pragma-na [off] %pragma not applicable to this compilation
- *!=not-my-pragma
- *!  warns about a \c{%pragma} directive which is not applicable to
- *!  this particular assembly session.  This is not yet implemented.
- */
-
-/* Naked %pragma */
-/*!
- *!pragma-empty [off] empty %pragma directive
- *!  warns about a \c{%pragma} directive containing nothing.
- *!  This is treated identically to \c{%pragma ignore} except
- *!  for this optional warning.
- */
 void process_pragma(char *str)
 {
-    const struct pragma_facility *pf;
     struct pragma pragma;
     char *p;
 
@@ -260,11 +185,26 @@ void process_pragma(char *str)
 
     pragma.facility_name = nasm_get_word(str, &p);
     if (!pragma.facility_name) {
-        /* Empty %pragma */
-	nasm_warn(ERR_PASS2|WARN_PRAGMA_EMPTY,
-		   "empty %%pragma directive, ignored");
-        return;
+	nasm_error(ERR_WARNING|ERR_PASS2|WARN_BAD_PRAGMA,
+		   "empty pragma directive");
+        return;                 /* Empty pragma */
     }
+
+    /*
+     * The facility "ignore" means just that; don't even complain of
+     * the absence of an operation.
+     */
+    if (!nasm_stricmp(pragma.facility_name, "ignore"))
+        return;
+
+    /*
+     * The "output" and "debug" facilities are aliases for the
+     * current output and debug formats, respectively.
+     */
+    if (!nasm_stricmp(pragma.facility_name, "output"))
+        pragma.facility_name = ofmt->shortname;
+    if (!nasm_stricmp(pragma.facility_name, "debug"))
+        pragma.facility_name = dfmt->shortname;
 
     pragma.opname = nasm_get_word(p, &p);
     if (!pragma.opname)
@@ -274,25 +214,18 @@ void process_pragma(char *str)
 
     pragma.tail = nasm_trim_spaces(p);
 
-    /*
-     * Search the global pragma namespaces. This is done
-     * as a loop rather than than letting search_pragma_list()
-     * just run, because we don't want to keep searching if
-     * we have a facility match, thus we want to call
-     * search_pragma_list() individually for each namespace.
-     */
-    for (pf = global_pragmas; pf->name; pf++) {
-        if (search_pragma_list(NULL, NULL, pf, &pragma) != DIRR_UNKNOWN)
-            return;
-    }
+    /* Look for a global pragma namespace */
+    if (search_pragma_list(global_pragmas, NULL, NULL, &pragma))
+	return;
 
-    /* Is it an output pragma? */
-    if (output_pragma(&pragma) != DIRR_UNKNOWN)
-        return;
+    /* Look to see if it is an output backend pragma */
+    if (search_pragma_list(ofmt->pragmas, ofmt->shortname,
+                           output_pragma, &pragma))
+	return;
 
-    /* Is it a debug pragma */
-    if (debug_pragma(&pragma) != DIRR_UNKNOWN)
-        return;
+    /* Look to see if it is a debug format pragma */
+    if (search_pragma_list(dfmt->pragmas, dfmt->shortname, NULL, &pragma))
+	return;
 
     /*
      * Note: it would be nice to warn for an unknown namespace,
@@ -306,30 +239,11 @@ void process_pragma(char *str)
      */
 }
 
-/* %pragma ignore */
-static enum directive_result ignore_pragma(const struct pragma *pragma)
-{
-    (void)pragma;
-    return DIRR_OK;             /* Even for D_none! */
-}
-
 /*
- * Process output and debug pragmas, by either list name or generic
- * name. Note that the output/debug format list can hook the default
- * names if they so choose.
+ * Generic pragmas that apply to all output backends; these are handled
+ * specially so they can be made selective based on the output format.
  */
-static enum directive_result output_pragma_common(const struct pragma *);
 static enum directive_result output_pragma(const struct pragma *pragma)
-{
-    static const struct pragma_facility
-        output_pragma_def = { "output", output_pragma_common };
-
-    return search_pragma_list(ofmt->pragmas, ofmt->shortname,
-                              &output_pragma_def, pragma);
-}
-
-/* Generic pragmas that apply to all output backends */
-static enum directive_result output_pragma_common(const struct pragma *pragma)
 {
     switch (pragma->opcode) {
     case D_PREFIX:
@@ -349,15 +263,6 @@ static enum directive_result output_pragma_common(const struct pragma *pragma)
     default:
         return DIRR_UNKNOWN;
     }
-}
-
-static enum directive_result debug_pragma(const struct pragma *pragma)
-{
-    static const struct pragma_facility
-        debug_pragma_def = { "debug", NULL };
-
-    return search_pragma_list(dfmt->pragmas, dfmt->shortname,
-                              &debug_pragma_def, pragma);
 }
 
 /*

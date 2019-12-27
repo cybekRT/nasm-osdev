@@ -39,7 +39,12 @@
 
 #include "compiler.h"
 
-#include "nctype.h"
+#include <stdio.h>
+#include <stdarg.h>
+#include <stdlib.h>
+#include <string.h>
+#include <ctype.h>
+#include <limits.h>
 #include <time.h>
 
 #include "nasm.h"
@@ -58,19 +63,17 @@ static void nop_init(void)
     /* Nothing to do */
 }
 
-static void nop_reset(const char *file, enum preproc_mode mode,
-                      struct strlist *deplist)
+static void nop_reset(const char *file, int pass, StrList **deplist)
 {
-    (void)mode;                 /* placate compilers */
-
     src_set(0, file);
     nop_lineinc = 1;
     nop_fp = nasm_open_read(file, NF_TEXT);
 
     if (!nop_fp)
-	nasm_fatalf(ERR_NOFILE, "unable to open input file `%s'", file);
+	nasm_fatal(ERR_NOFILE, "unable to open input file `%s'", file);
+    (void)pass;                 /* placate compilers */
 
-    strlist_add(deplist, file);
+    nasm_add_string_to_strlist(deplist, file);
 }
 
 static char *nop_getline(void)
@@ -128,22 +131,18 @@ static char *nop_getline(void)
         break;
     }
 
-    lfmt->line(LIST_READ, src_get_linnum(), buffer);
+    lfmt->line(LIST_READ, buffer);
 
     return buffer;
 }
 
-static void nop_cleanup_pass(void)
+static void nop_cleanup(int pass)
 {
+    (void)pass;                     /* placate GCC */
     if (nop_fp) {
         fclose(nop_fp);
         nop_fp = NULL;
     }
-}
-
-static void nop_cleanup_session(void)
-{
-    /* Nothing we need to do */
 }
 
 static void nop_extra_stdmac(macros_t *macros)
@@ -172,28 +171,21 @@ static void nop_pre_command(const char *what, char *string)
     (void)string;
 }
 
-static void nop_include_path(struct strlist *list)
+static void nop_include_path(char *path)
 {
-    (void)list;
+    (void)path;
 }
 
-static void nop_error_list_macros(errflags severity)
+static void nop_error_list_macros(int severity)
 {
     (void)severity;
-}
-
-static bool nop_suppress_error(errflags severity)
-{
-    (void)severity;
-    return false;
 }
 
 const struct preproc_ops preproc_nop = {
     nop_init,
     nop_reset,
     nop_getline,
-    nop_cleanup_pass,
-    nop_cleanup_session,
+    nop_cleanup,
     nop_extra_stdmac,
     nop_pre_define,
     nop_pre_undefine,
@@ -201,5 +193,4 @@ const struct preproc_ops preproc_nop = {
     nop_pre_command,
     nop_include_path,
     nop_error_list_macros,
-    nop_suppress_error
 };

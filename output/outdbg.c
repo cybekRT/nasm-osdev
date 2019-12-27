@@ -38,7 +38,10 @@
 
 #include "compiler.h"
 
-#include "nctype.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <ctype.h>
 #include <errno.h>
 
 #include "nasm.h"
@@ -72,8 +75,8 @@ static void dbg_init(void)
 
 static void dbg_reset(void)
 {
-    fprintf(ofile, "*** pass reset: pass = %"PRId64" (%s)\n",
-            pass_count(), pass_type_name());
+    fprintf(ofile, "*** pass reset: pass0 = %d, passn = %"PRId64"\n",
+            pass0, passn);
 }
 
 static void dbg_cleanup(void)
@@ -87,7 +90,8 @@ static void dbg_cleanup(void)
     }
 }
 
-static int32_t dbg_add_section(char *name, int *bits, const char *whatwecallit)
+static int32_t dbg_add_section(char *name, int pass, int *bits,
+                                     const char *whatwecallit)
 {
     int seg;
 
@@ -117,8 +121,8 @@ static int32_t dbg_add_section(char *name, int *bits, const char *whatwecallit)
             s->number = seg = seg_alloc();
             s->next = dbgsect;
             dbgsect = s;
-            fprintf(ofile, "%s %s (%s) pass %"PRId64" (%s) : returning %d\n",
-                    whatwecallit, name, tail, pass_count(), pass_type_name(), seg);
+            fprintf(ofile, "%s %s (%s) pass %d: returning %d\n",
+                    whatwecallit, name, tail, pass, seg);
 
             if (section_labels)
                 backend_label(s->name, s->number + 1, 0);
@@ -127,9 +131,9 @@ static int32_t dbg_add_section(char *name, int *bits, const char *whatwecallit)
     return seg;
 }
 
-static int32_t dbg_section_names(char *name, int *bits)
+static int32_t dbg_section_names(char *name, int pass, int *bits)
 {
-    return dbg_add_section(name, bits, "section_names");
+    return dbg_add_section(name, pass, bits, "section_names");
 }
 
 static int32_t dbg_herelabel(const char *name, enum label_type type,
@@ -318,8 +322,13 @@ static void dbg_sectalign(int32_t seg, unsigned int value)
             seg, value);
 }
 
+static int32_t dbg_segbase(int32_t segment)
+{
+    return segment;
+}
+
 static enum directive_result
-dbg_directive(enum directive directive, char *value)
+dbg_directive(enum directive directive, char *value, int pass)
 {
     switch (directive) {
         /*
@@ -330,7 +339,7 @@ dbg_directive(enum directive directive, char *value)
     case D_GROUP:
     {
         int dummy;
-        dbg_add_section(value, &dummy, "directive:group");
+        dbg_add_section(value, pass, &dummy, "directive:group");
         break;
     }
 
@@ -338,8 +347,8 @@ dbg_directive(enum directive directive, char *value)
         break;
     }
 
-    fprintf(ofile, "directive [%s] value [%s] pass %"PRId64" (%s)\n",
-            directive_dname(directive), value, pass_count(), pass_type_name());
+    fprintf(ofile, "directive [%s] value [%s] (pass %d)\n",
+            directive_dname(directive), value, pass);
     return DIRR_OK;
 }
 
@@ -371,7 +380,7 @@ dbg_pragma(const struct pragma *pragma)
                 errno = 0;
                 arg = strtoul(pragma->tail, &ep, 0);
                 if (errno || *nasm_skip_spaces(ep)) {
-                    nasm_warn(WARN_PRAGMA_BAD | ERR_PASS2,
+                    nasm_error(ERR_WARNING | WARN_BAD_PRAGMA | ERR_PASS2,
                                "invalid %%pragma dbg maxdump argument");
                     return DIRR_ERROR;
                 } else {
@@ -475,7 +484,7 @@ const struct ofmt of_dbg = {
     dbg_section_names,
     dbg_herelabel,
     dbg_sectalign,
-    null_segbase,
+    dbg_segbase,
     dbg_directive,
     dbg_cleanup,
     dbg_pragma_list

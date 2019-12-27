@@ -37,7 +37,10 @@
 
 #include "compiler.h"
 
-#include "nctype.h"
+#include <ctype.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 #include "nasm.h"
 #include "float.h"
@@ -179,8 +182,9 @@ static int32_t read_exponent(const char *string, int32_t max)
         } else if (*string == '_') {
             /* do nothing */
         } else {
-            nasm_nonfatal("invalid character in floating-point constant %s: '%c'",
-                          "exponent", *string);
+            nasm_error(ERR_NONFATAL,
+                  "invalid character in floating-point constant %s: '%c'",
+                  "exponent", *string);
             return INT32_MAX;
         }
         string++;
@@ -215,7 +219,8 @@ static bool ieee_flconvert(const char *string, fp_limb *mant,
             if (!seendot) {
                 seendot = true;
             } else {
-                nasm_nonfatal("too many periods in floating-point constant");
+                nasm_error(ERR_NONFATAL,
+                      "too many periods in floating-point constant");
                 return false;
             }
         } else if (*string >= '0' && *string <= '9') {
@@ -229,13 +234,9 @@ static bool ieee_flconvert(const char *string, fp_limb *mant,
                     *p++ = *string - '0';
                 } else {
                     if (!warned) {
-                        /*!
-                         *!float-toolong [on] too many digits in floating-point number
-                         *!  warns about too many digits in floating-point numbers.
-                         */
-                        nasm_warn(WARN_FLOAT_TOOLONG|ERR_PASS2,
-                                   "floating-point constant significand contains "
-                                   "more than %i digits", MANT_DIGITS);
+                        nasm_error(ERR_WARNING|WARN_FL_TOOLONG|ERR_PASS2,
+                              "floating-point constant significand contains "
+                              "more than %i digits", MANT_DIGITS);
                         warned = true;
                     }
                 }
@@ -246,9 +247,9 @@ static bool ieee_flconvert(const char *string, fp_limb *mant,
         } else if (*string == '_') {
             /* do nothing */
         } else {
-            nasm_nonfatalf(ERR_PASS2,
-                           "invalid character in floating-point constant %s: '%c'",
-                           "significand", *string);
+            nasm_error(ERR_NONFATAL|ERR_PASS2,
+                  "invalid character in floating-point constant %s: '%c'",
+                  "significand", *string);
             return false;
         }
         string++;
@@ -532,7 +533,8 @@ static bool ieee_flconvert_bin(const char *string, int bits,
             if (!seendot)
                 seendot = true;
             else {
-                nasm_nonfatal("too many periods in floating-point constant");
+                nasm_error(ERR_NONFATAL,
+                      "too many periods in floating-point constant");
                 return false;
             }
         } else if ((v = hexval(c)) < (unsigned int)radix) {
@@ -574,7 +576,8 @@ static bool ieee_flconvert_bin(const char *string, int bits,
         } else if (c == '_') {
             /* ignore */
         } else {
-            nasm_nonfatal("floating-point constant: `%c' is invalid character", c);
+            nasm_error(ERR_NONFATAL,
+                  "floating-point constant: `%c' is invalid character", c);
             return false;
         }
     }
@@ -673,7 +676,8 @@ static int to_packed_bcd(const char *str, const char *p,
     int tv = -1;
 
     if (fmt != &ieee_80) {
-        nasm_nonfatal("packed BCD requires an 80-bit format");
+        nasm_error(ERR_NONFATAL,
+              "packed BCD requires an 80-bit format");
         return 0;
     }
 
@@ -681,8 +685,10 @@ static int to_packed_bcd(const char *str, const char *p,
         c = *p--;
         if (c >= '0' && c <= '9') {
             if (tv < 0) {
-                if (n == 9)
-                    nasm_warn(WARN_OTHER|ERR_PASS2, "packed BCD truncated to 18 digits");
+                if (n == 9) {
+                    nasm_error(ERR_WARNING|ERR_PASS2,
+                          "packed BCD truncated to 18 digits");
+                }
                 tv = c-'0';
             } else {
                 if (n < 9)
@@ -693,7 +699,8 @@ static int to_packed_bcd(const char *str, const char *p,
         } else if (c == '_') {
             /* do nothing */
         } else {
-            nasm_nonfatal("invalid character `%c' in packed BCD constant", c);
+            nasm_error(ERR_NONFATAL,
+                  "invalid character `%c' in packed BCD constant", c);
             return 0;
         }
     }
@@ -728,7 +735,11 @@ static int to_float(const char *str, int s, uint8_t *result,
     const int bits = fmt->bytes * 8;
     const char *strend;
 
-    nasm_assert(str[0]);
+    if (!str[0]) {
+        nasm_panic(0,
+              "internal errror: empty string passed to float_const");
+        return 0;
+    }
 
     strend = strchr(str, '\0');
     if (strend[-1] == 'P' || strend[-1] == 'p')
@@ -737,23 +748,24 @@ static int to_float(const char *str, int s, uint8_t *result,
     if (str[0] == '_') {
         /* Special tokens */
 
-        switch (str[3]) {
-        case 'n':              /* __?nan?__ */
+        switch (str[2]) {
+        case 'n':              /* __nan__ */
         case 'N':
-        case 'q':              /* __?qnan?__ */
+        case 'q':              /* __qnan__ */
         case 'Q':
             type = FL_QNAN;
             break;
-        case 's':              /* __?snan?__ */
+        case 's':              /* __snan__ */
         case 'S':
             type = FL_SNAN;
             break;
-        case 'i':              /* __?infinity?__ */
+        case 'i':              /* __infinity__ */
         case 'I':
             type = FL_INFINITY;
             break;
         default:
-            nasm_nonfatal("internal error: unknown FP constant token `%s'", str);
+            nasm_error(ERR_NONFATAL,
+                  "internal error: unknown FP constant token `%s'\n", str);
             type = FL_QNAN;
             break;
         }
@@ -799,8 +811,9 @@ static int to_float(const char *str, int s, uint8_t *result,
             if (exponent >= 2 - expmax && exponent <= expmax) {
                 type = FL_NORMAL;
             } else if (exponent > 0) {
-                nasm_warn(WARN_FLOAT_OVERFLOW|ERR_PASS2,
-                           "overflow in floating-point constant");
+                if (pass0 == 1)
+                    nasm_error(ERR_WARNING|WARN_FL_OVERFLOW|ERR_PASS2,
+                          "overflow in floating-point constant");
                 type = FL_INFINITY;
             } else {
                 /* underflow or denormal; the denormal code handles
@@ -833,21 +846,13 @@ static int to_float(const char *str, int s, uint8_t *result,
             mant[0] |= exponent << (LIMB_BITS-1 - fmt->exponent);
         } else {
             if (daz || is_zero(mant)) {
-                /*!
-                 *!float-underflow [off] floating point underflow
-                 *!  warns about floating point underflow (a nonzero
-                 *!  constant rounded to zero.)
-                 */
-                nasm_warn(WARN_FLOAT_UNDERFLOW|ERR_PASS2,
-                           "underflow in floating-point constant");
+                /* Flush denormals to zero */
+                nasm_error(ERR_WARNING|WARN_FL_UNDERFLOW|ERR_PASS2,
+                      "underflow in floating-point constant");
                 goto zero;
             } else {
-                /*!
-                 *!float-denorm [off] floating point denormal
-                 *!  warns about denormal floating point constants.
-                 */
-                nasm_warn(WARN_FLOAT_DENORM|ERR_PASS2,
-                           "denormal floating-point constant");
+                nasm_error(ERR_WARNING|WARN_FL_DENORM|ERR_PASS2,
+                      "denormal floating-point constant");
             }
         }
         break;
@@ -862,12 +867,8 @@ static int to_float(const char *str, int s, uint8_t *result,
             ieee_shr(mant, 1);
             exponent++;
             if (exponent >= (expmax << 1)-1) {
-                /*!
-                 *!float-overflow [on] floating point overflow
-                 *!  warns about floating point underflow.
-                 */
-                nasm_warn(WARN_FLOAT_OVERFLOW|ERR_PASS2,
-                           "overflow in floating-point constant");
+                    nasm_error(ERR_WARNING|WARN_FL_OVERFLOW|ERR_PASS2,
+                          "overflow in floating-point constant");
                 type = FL_INFINITY;
                 goto overflow;
             }
@@ -918,7 +919,7 @@ int float_const(const char *number, int sign, uint8_t *result, int bytes)
     case 16:
         return to_float(number, sign, result, &ieee_128);
     default:
-        nasm_panic("strange value %d passed to float_const", bytes);
+        nasm_panic(0, "strange value %d passed to float_const", bytes);
         return 0;
     }
 }

@@ -32,6 +32,7 @@
  * ----------------------------------------------------------------------- */
 
 #include "compiler.h"
+#include <string.h>
 
 #ifndef HAVE_STRNLEN
 

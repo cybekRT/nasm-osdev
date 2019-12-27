@@ -44,6 +44,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <errno.h>
 
 #include "rdfutils.h"
@@ -228,24 +229,17 @@ int rdf_errno = 0;
 /* ========================================================================
  * Hook for nasm_error() to work
  * ======================================================================== */
-void nasm_verror(errflags severity, const char *fmt, va_list val)
+static void rdoff_verror(int severity, const char *fmt, va_list val)
 {
-    severity &= ERR_MASK;
-
     vfprintf(stderr, fmt, val);
-    if (severity >= ERR_FATAL)
-        exit(severity - ERR_FATAL + 1);
-}
 
-fatal_func nasm_verror_critical(errflags severity, const char *fmt, va_list val)
-{
-    nasm_verror(severity, fmt, val);
-    abort();
+    if ((severity & ERR_MASK) >= ERR_FATAL)
+        exit(1);
 }
 
 void rdoff_init(void)
 {
-
+    nasm_set_verror(rdoff_verror);
 }
 
 /* ========================================================================

@@ -38,6 +38,9 @@
 #include "version.h"
 #include "compiler.h"
 
+#include <stdio.h>
+#include <stddef.h>
+#include <stdlib.h>
 
 #include "nasm.h"
 #include "nasmlib.h"
@@ -59,7 +62,7 @@ static void cv8_output(int type, void *param);
 static void cv8_cleanup(void);
 
 const struct dfmt df_cv8 = {
-    "Codeview 8+",              /* .fullname */
+    "Codeview 8",               /* .fullname */
     "cv8",                      /* .shortname */
     cv8_init,                   /* .init */
     cv8_linenum,                /* .linenum */
@@ -174,6 +177,7 @@ static void cv8_init(void)
 
     cv8_state.source_files = NULL;
     cv8_state.source_files_tail = &cv8_state.source_files;
+    hash_init(&cv8_state.file_hash, HASH_MEDIUM);
 
     cv8_state.num_files = 0;
     cv8_state.total_filename_len = 0;
@@ -365,9 +369,9 @@ done_0:
     fclose(f);
 done:
     if (!success) {
-        nasm_nonfatal("unable to hash file %s. "
-                      "Debug information may be unavailable.",
-                      filename);
+        nasm_error(ERR_NONFATAL, "unable to hash file %s. "
+                 "Debug information may be unavailable.\n",
+                 filename);
     }
     return;
 }
@@ -476,7 +480,7 @@ static void register_reloc(struct coff_Section *const sect,
                 return;
         }
     }
-    nasm_panic("codeview: relocation for unregistered symbol: %s", sym);
+    nasm_panic(0, "codeview: relocation for unregistered symbol: %s", sym);
 }
 
 static inline void section_write32(struct coff_Section *sect, uint32_t val)
@@ -651,7 +655,7 @@ static uint16_t write_symbolinfo_properties(struct coff_Section *sect,
     else if (win32)
         section_write16(sect, 0x0006); /* machine */
     else
-        nasm_panic("neither win32 nor win64 are set!");
+        nasm_assert(!"neither win32 nor win64 are set!");
     section_write16(sect, 0); /* verFEMajor */
     section_write16(sect, 0); /* verFEMinor */
     section_write16(sect, 0); /* verFEBuild */
@@ -708,7 +712,7 @@ static uint16_t write_symbolinfo_symbols(struct coff_Section *sect)
             section_write8(sect, 0); /* FLAG */
             break;
         default:
-            nasm_panic("unknown symbol type");
+            nasm_assert(!"unknown symbol type");
         }
 
         section_wbytes(sect, sym->name, strlen(sym->name) + 1);

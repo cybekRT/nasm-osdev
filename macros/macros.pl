@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 ## --------------------------------------------------------------------------
-##
+##   
 ##   Copyright 1996-2009 The NASM Authors - All Rights Reserved
 ##   See the file AUTHORS included with the NASM distribution for
 ##   the specific copyright holders.
@@ -15,7 +15,7 @@
 ##     copyright notice, this list of conditions and the following
 ##     disclaimer in the documentation and/or other materials provided
 ##     with the distribution.
-##
+##     
 ##     THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND
 ##     CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES,
 ##     INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
@@ -45,26 +45,13 @@ my $fname;
 my $line = 0;
 my $index      = 0;
 my $tasm_count = 0;
-my @pname;
-
-# Default names for various bytes
-for (my $o = 0; $o < 256; $o++) {
-    my $c = chr($o);
-    if ($o < 32 || $o > 126) {
-	$pname[$o] = sprintf("%d", $o);
-    } elsif ($c =~ /^[\'\"\\]$/) {
-	$pname[$o] = "\'\\".$c."\'";
-    } else {
-	$pname[$o] = "\'".$c."\'";
-    }
-}
 
 #
 # Print out a string as a character array
 #
 sub charcify(@) {
     my $l = '';
-    my ($c, $o);
+    my $c, $o;
     my $space = 1;
     my $quote = 0;
 
@@ -77,19 +64,24 @@ sub charcify(@) {
 	} elsif ($c =~ /^[\'\"\`]$/) {
 	    $quote = $o;
 	} else {
-	    if ($c eq ' ') {
+	    if ($c =~ /\s/) {
 		next if ($space);
 		$o = 32;
 		$c = ' ';
 		$space = 1;
-	    } elsif ($o < 32 || $o > 126) {
+	    } elsif ($o > 126) {
 		$space = 1;	# Implicit space after compacted directive
 	    } else {
 		$space = 0;
 	    }
 	}
-	$l .= $pname[$o];
-	$l .= ',';
+
+	if ($o < 32 || $o > 126 || $c eq '"' || $c eq "\\") {
+	    $l .= sprintf("%3d,", $o);
+	} else {
+	    $c =~ s/\'/\\'/;	# << sanitize single quote. 
+	    $l .= "\'".$c."\',";
+	}
     }
     return $l;
 }
@@ -117,25 +109,9 @@ my @pkg_list   = ();
 my %pkg_number = ();
 my $pkg;
 my @out_list   = ();
-my @std_list   = ();
 my $outfmt;
 my $lastname;
 my $z;
-
-my @pptok_list = sort { $pptok_hash{$a} <=> $pptok_hash{$b} } keys %pptok_hash;
-my %pnum;
-
-foreach my $pt (@pptok_list) {
-    my $n = $pptok_hash{$pt};
-    if ($pt !~ /[A-Z]/ && $n < 256-96) {
-	$n = ($n+128) & 255;
-	(my $et = $pt) =~ s/^\%/p_/;
-	printf OUT "#define %-24s %3d\n", $et, $n;
-	$pnum{$pt} = $n;
-	$pname[$n] = $et;
-    }
-}
-printf OUT "#define %-24s %3d\n\n", 'EOL', 127;
 
 foreach $args ( @ARGV ) {
     my @file_list = glob ( $args );
@@ -150,15 +126,11 @@ foreach $args ( @ARGV ) {
 		chomp;
 		$line++;
 	    }
-	    s/^\s*(([^\'\"\;]|\"[^\"]*\"|\'[^\']*\')*?)\s*(\;.*)?$/$1/;
-	    s/\s+/ /g;
-	    next if ($_ eq '');
-
-	    if (m/^OUT:\s*(\S.*)$/) {
+	    if (m/^OUT:\s*(.*\S)\s*$/) {
 		undef $pkg;
 		my @out_alias = split(/\s+/, $1);
 		if (defined($name)) {
-		    printf OUT "        /* %4d */ EOL\n", $index++;
+		    printf OUT "        /* %4d */ 0\n", $index++;
 		    print OUT "};\n#endif\n";
 		    undef $name;
 		}
@@ -173,27 +145,31 @@ foreach $args ( @ARGV ) {
 		print OUT "\nconst unsigned char ${name}[] = {\n";
 		print OUT "    /* From $fname */\n";
 		$lastname = $fname;
-	    } elsif (m/^STD:\s*(\S+)$/) {
+		push(@out_list, $out_alias[0]);
+		$out_index{$out_alias[0]} = $index;
+	    } elsif (m/^STD:\s*(.*\S)\s*$/) {
 		undef $pkg;
-		my $std = $1;
+		my @out_alias = split(/\s+/, $1);
 		if (defined($name)) {
-		    printf OUT "        /* %4d */ EOL\n", $index++;
+		    printf OUT "        /* %4d */ 0\n", $index++;
 		    print OUT "};\n#endif\n";
 		    undef $name;
 		}
 		$index = 0;
 		print OUT "\n#if 1";
-		$name = 'nasm_stdmac_' . $std;
+		$name = 'nasm_stdmac_' . $out_alias[0];
 		print OUT "\nconst unsigned char ${name}[] = {\n";
 		print OUT "    /* From $fname */\n";
 		$lastname = $fname;
-	    } elsif (m/^USE:\s*(\S+)$/) {
+		push(@std_list, $out_alias[0]);
+		$std_index{$std_alias[0]} = $index;
+	    } elsif (m/^USE:\s*(\S+)\s*$/) {
 		$pkg = $1;
 		if (defined($pkg_number{$pkg})) {
 		    die "$0: $fname: duplicate package: $pkg\n";
 		}
 		if (defined($name)) {
-		    printf OUT "        /* %4d */ EOL\n", $index++;
+		    printf OUT "        /* %4d */ 0\n", $index++;
 		    print OUT "};\n#endif\n";
 		    undef $name;
 		}
@@ -205,27 +181,26 @@ foreach $args ( @ARGV ) {
 		$lastname = $fname;
 		push(@pkg_list, $pkg);
 		$pkg_number{$pkg} = $npkg++;
-		$z = pack("C", $pnum{'%define'})."__?USE_\U$pkg\E?__";
-		printf OUT "        /* %4d */ %sEOL,\n", $index, charcify($z);
-		$z = pack("C", $pnum{'%defalias'})."__USE_\U$pkg\E__ __?USE\U$pkg\E?__";
-		printf OUT "        /* %4d */ %sEOL,\n", $index, charcify($z);
+		$z = pack("C", $pptok_hash{'%define'}+128)."__USE_\U$pkg\E__";
+		printf OUT "        /* %4d */ %s0,\n", $index, charcify($z);
 		$index += length($z)+1;
-	    } else {
-		my($s1, $s2, $pd, $ws);
+	    } elsif (m/^\s*((\s*([^\"\';\s]+|\"[^\"]*\"|\'[^\']*\'))*)\s*(;.*)?$/) {
+		my $s1, $s2, $pd, $ws;
 
 		if (!defined($name)) {
 		    die "$0: $fname: macro declarations outside a known block\n";
 		}
-
-		$s1 = $_;
+		
+		$s1 = $1;
 		$s2 = '';
 		while ($s1 =~ /(\%[a-zA-Z_][a-zA-Z0-9_]*)((\s+)(.*)|)$/) {
 		    $s2 .= "$'";
 		    $pd = $1;
 		    $ws = $3;
 		    $s1 = $4;
-		    if (defined($pnum{$pd})) {
-			$s2 .= pack("C", $pnum{$pd});
+		    if (defined($pptok_hash{$pd}) &&
+			$pptok_hash{$pd} <= 127) {
+			$s2 .= pack("C", $pptok_hash{$pd}+128);
 		    } else {
 			$s2 .= $pd.$ws;
 		    }
@@ -235,11 +210,13 @@ foreach $args ( @ARGV ) {
 		    if ($lastname ne $fname) {
 			print OUT "\n    /* From $fname */\n";
 			$lastname = $fname;
-		    }
-		    printf OUT "        /* %4d */ %sEOL,\n",
+		    }	
+		    printf OUT "        /* %4d */ %s0,\n",
 			$index, charcify($s2);
 		    $index += length($s2)+1;
 		}
+	    } else {
+		die "$fname:$line:  error unterminated quote";
 	    }
 	}
         close(INPUT);
@@ -247,7 +224,7 @@ foreach $args ( @ARGV ) {
 }
 
 if (defined($name)) {
-    printf OUT "        /* %4d */ EOL\n", $index++;
+    printf OUT "        /* %4d */ 0\n", $index++;
     print OUT "};\n#endif\n";
     undef $name;
 }
@@ -261,15 +238,15 @@ verify_hash_table(\%pkg_number, \@hashinfo);
 my ($n, $sv, $g) = @hashinfo;
 die if ($n & ($n-1));
 
-printf OUT "const int use_package_count = %d;\n\n", $npkg;
-
-print OUT "const struct use_package *nasm_find_use_package(const char *name)\n";
+print OUT "const unsigned char *nasm_stdmac_find_package(const char *package)\n";
 print OUT "{\n";
-print OUT "    static const struct use_package packages[$npkg] = {\n";
-my $ix = 0;
+print OUT "    static const struct {\n";
+print OUT "         const char *package;\n";
+print OUT "         const unsigned char *macros;\n";
+print OUT "    } packages[$npkg] = {\n";
 foreach $pkg (@pkg_list) {
-    printf OUT "        { \"%s\", nasm_usemac_%s, %d },\n",
-	$pkg, $pkg, $ix++;
+    printf OUT "        { \"%s\", nasm_usemac_%s },\n",
+	$pkg, $pkg;
 }
 print OUT "    };\n";
 
@@ -299,7 +276,7 @@ print OUT  "    uint64_t crc;\n";
 print OUT  "    uint16_t ix;\n";
 print OUT  "\n";
 
-printf OUT "    crc = crc64i(UINT64_C(0x%08x%08x), name);\n",
+printf OUT "    crc = crc64i(UINT64_C(0x%08x%08x), package);\n",
     $$sv[0], $$sv[1];
 print  OUT "    k1 = (uint32_t)crc;\n";
 print  OUT "    k2 = (uint32_t)(crc >> 32);\n";
@@ -308,10 +285,10 @@ printf OUT "    ix = hash1[k1 & 0x%x] + hash2[k2 & 0x%x];\n", $n-1, $n-1;
 printf OUT "    if (ix >= %d)\n", scalar(@pkg_list);
 print OUT  "        return NULL;\n";
 print OUT  "\n";
-print OUT  "    if (nasm_stricmp(packages[ix].package, name))\n";
+print OUT  "    if (nasm_stricmp(packages[ix].package, package))\n";
 print OUT  "        return NULL;\n";
 print OUT  "\n";
-print OUT  "    return &packages[ix];\n";
+print OUT  "    return packages[ix].macros;\n";
 print OUT  "}\n";
 
 close(OUT);

@@ -78,7 +78,7 @@ void null_debug_cleanup(void)
 }
 
 const struct dfmt null_debug_form = {
-    "Null",
+    "Null debug format",
     "null",
     null_debug_init,
     null_debug_linenum,

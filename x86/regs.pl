@@ -64,8 +64,7 @@ sub process_line($) {
 	$reg_suffix = $4;
     } else {
 	$nregs = 1;
-	undef $reg_prefix;
-	undef $reg_suffix;
+	undef $reg_prefix, $reg_suffix;
     }
 
     while ($nregs--) {
