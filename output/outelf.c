@@ -2285,6 +2285,7 @@ const struct ofmt of_elf32 = {
     elf_directive,
     elf_cleanup,
     elf_pragma_list,
+    NULL
 };
 
 static const struct dfmt elf64_df_dwarf = {
@@ -2337,6 +2338,7 @@ const struct ofmt of_elf64 = {
     elf_directive,
     elf_cleanup,
     elf_pragma_list,
+    NULL
 };
 
 static const struct dfmt elfx32_df_dwarf = {
@@ -2388,7 +2390,8 @@ const struct ofmt of_elfx32 = {
     elf_segbase,
     elf_directive,
     elf_cleanup,
-    NULL                        /* pragma list */
+    NULL,                        /* pragma list */
+    NULL
 };
 
 static bool is_elf64(void)

@@ -1648,7 +1648,8 @@ const struct ofmt of_bin = {
     bin_segbase,
     bin_directive,
     bin_cleanup,
-    NULL                        /* pragma list */
+    NULL,                        /* pragma list */
+    &origin
 };
 
 const struct ofmt of_ith = {
@@ -1671,7 +1672,8 @@ const struct ofmt of_ith = {
     bin_segbase,
     bin_directive,
     bin_cleanup,
-    NULL                        /* pragma list */
+    NULL,                        /* pragma list */
+    &origin
 };
 
 const struct ofmt of_srec = {
@@ -1694,7 +1696,8 @@ const struct ofmt of_srec = {
     bin_segbase,
     bin_directive,
     bin_cleanup,
-    NULL                        /* pragma list */
+    NULL,                        /* pragma list */
+    &origin
 };
 
 #endif                          /* #ifdef OF_BIN */

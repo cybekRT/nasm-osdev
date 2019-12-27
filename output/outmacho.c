@@ -2405,7 +2405,8 @@ const struct ofmt of_macho32 = {
     macho_segbase,
     null_directive,
     macho_cleanup,
-    macho_pragma_list
+    macho_pragma_list,
+    NULL
 };
 #endif
 
@@ -2473,6 +2474,7 @@ const struct ofmt of_macho64 = {
     null_directive,
     macho_cleanup,
     macho_pragma_list,
+    NULL
 };
 #endif
 

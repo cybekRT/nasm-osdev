@@ -1515,7 +1515,8 @@ const struct ofmt of_ieee = {
     ieee_segbase,
     ieee_directive,
     ieee_cleanup,
-    NULL                        /* pragma list */
+    NULL,                        /* pragma list */
+    NULL
 };
 
 #endif                          /* OF_IEEE */

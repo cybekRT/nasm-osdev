@@ -1166,7 +1166,8 @@ const struct ofmt of_coff = {
     coff_segbase,
     coff_directives,
     coff_cleanup,
-    NULL                        /* pragma list */
+    NULL,                        /* pragma list */
+    NULL
 };
 
 #endif
@@ -1197,7 +1198,8 @@ const struct ofmt of_win32 = {
     coff_segbase,
     coff_directives,
     coff_cleanup,
-    NULL                        /* pragma list */
+    NULL,                        /* pragma list */
+    NULL
 };
 
 #endif
@@ -1226,7 +1228,8 @@ const struct ofmt of_win64 = {
     coff_segbase,
     coff_directives,
     coff_cleanup,
-    NULL                        /* pragma list */
+    NULL,                        /* pragma list */
+    NULL
 };
 
 #endif

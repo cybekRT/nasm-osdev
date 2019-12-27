@@ -782,7 +782,8 @@ const struct ofmt of_rdf2 = {
     rdf2_segbase,
     rdf2_directive,
     rdf2_cleanup,
-    NULL                        /* pragma list */
+    NULL,                        /* pragma list */
+    NULL
 };
 
 #endif                          /* OF_RDF2 */

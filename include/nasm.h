@@ -975,6 +975,8 @@ struct ofmt {
      * List of pragma facility names that apply to this backend.
      */
     const struct pragma_facility *pragmas;
+
+    uint64_t* globalOrigin;
 };
 
 /*

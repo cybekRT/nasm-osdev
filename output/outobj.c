@@ -2716,6 +2716,7 @@ const struct ofmt of_obj = {
     obj_segbase,
     obj_directive,
     obj_cleanup,
-    obj_pragma_list
+    obj_pragma_list,
+    NULL
 };
 #endif                          /* OF_OBJ */

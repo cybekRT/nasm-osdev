@@ -920,7 +920,8 @@ const struct ofmt of_aout = {
     aout_segbase,
     null_directive,
     aout_cleanup,
-    NULL                        /* pragma list */
+    NULL,                        /* pragma list */
+    NULL
 };
 
 #endif
@@ -947,7 +948,8 @@ const struct ofmt of_aoutb = {
     aout_segbase,
     null_directive,
     aout_cleanup,
-    NULL                        /* pragma list */
+    NULL,                        /* pragma list */
+    NULL
 };
 
 #endif

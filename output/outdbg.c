@@ -487,7 +487,8 @@ const struct ofmt of_dbg = {
     dbg_segbase,
     dbg_directive,
     dbg_cleanup,
-    dbg_pragma_list
+    dbg_pragma_list,
+    NULL
 };
 
 #endif                          /* OF_DBG */

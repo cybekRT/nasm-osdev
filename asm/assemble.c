@@ -416,7 +416,7 @@ static void out(struct out_data *data)
         zeropad = data->size - amax;
         data->size = amax;
     }
-    lfmt->output(data);
+    lfmt->output(data, ofmt);
     ofmt->output(data);
     data->offset  += data->size;
     data->insoffs += data->size;
@@ -424,7 +424,7 @@ static void out(struct out_data *data)
     if (zeropad) {
         data->type     = OUT_ZERODATA;
         data->size     = zeropad;
-        lfmt->output(data);
+        lfmt->output(data, ofmt);
         ofmt->output(data);
         data->offset  += zeropad;
         data->insoffs += zeropad;

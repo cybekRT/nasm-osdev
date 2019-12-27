@@ -63,7 +63,7 @@ struct lfmt {
      * relocatable address has been converted to OUT_RAWDATA by
      * then.
      */
-    void (*output)(const struct out_data *data);
+    void (*output)(const struct out_data *data, const struct ofmt *outFmt);
 
     /*
      * Called to send a text line to the listing generator. The

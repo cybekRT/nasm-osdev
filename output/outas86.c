@@ -632,7 +632,8 @@ const struct ofmt of_as86 = {
     as86_segbase,
     null_directive,
     as86_cleanup,
-    NULL                        /* pragma list */
+    NULL,                        /* pragma list */
+    NULL
 };
 
 #endif                          /* OF_AS86 */

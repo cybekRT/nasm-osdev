@@ -204,16 +204,19 @@ static void list_address(int64_t offset, const char *brackets,
     list_out(offset, q);
 }
 
-static void list_output(const struct out_data *data)
+static void list_output(const struct out_data *data, const struct ofmt *outFmt)
 {
     char q[24];
     uint64_t size = data->size;
     uint64_t offset = data->offset;
     const uint8_t *p = data->data;
 
-
     if (!listp || suppress || user_nolist)
         return;
+
+    if(outFmt->globalOrigin != NULL && *outFmt->globalOrigin > 0) {
+        offset += *outFmt->globalOrigin;
+    }
 
     switch (data->type) {
     case OUT_ZERODATA:
